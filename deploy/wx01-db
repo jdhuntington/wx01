@@ -1,0 +1,54 @@
+#!/bin/bash
+# Manages the TimescaleDB container for wx01.
+# Used by the systemd unit and can be run manually.
+
+set -euo pipefail
+
+CONTAINER_NAME="wx01-db"
+IMAGE="timescale/timescaledb:latest-pg17"
+DATA_DIR="/var/lib/wx01/pgdata"
+PORT="5433"
+
+case "${1:-}" in
+  start)
+    if docker inspect "$CONTAINER_NAME" &>/dev/null; then
+      docker start "$CONTAINER_NAME" 2>/dev/null || true
+    else
+      mkdir -p "$DATA_DIR"
+      docker run -d \
+        --name "$CONTAINER_NAME" \
+        --restart unless-stopped \
+        -e POSTGRES_USER=wx01 \
+        -e POSTGRES_PASSWORD=wx01 \
+        -e POSTGRES_DB=wx01 \
+        -p "127.0.0.1:${PORT}:5432" \
+        -v "${DATA_DIR}:/var/lib/postgresql/data" \
+        "$IMAGE"
+    fi
+
+    # Wait for postgres to be ready
+    echo "Waiting for postgres..."
+    for i in $(seq 1 30); do
+      if docker exec "$CONTAINER_NAME" pg_isready -U wx01 &>/dev/null; then
+        echo "Postgres ready."
+        exit 0
+      fi
+      sleep 1
+    done
+    echo "Postgres failed to start within 30s" >&2
+    exit 1
+    ;;
+
+  stop)
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    ;;
+
+  status)
+    docker inspect -f '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "not found"
+    ;;
+
+  *)
+    echo "Usage: $0 {start|stop|status}" >&2
+    exit 1
+    ;;
+esac

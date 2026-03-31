@@ -1,0 +1,30 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg17
+    environment:
+      POSTGRES_USER: wx01
+      POSTGRES_PASSWORD: wx01
+      POSTGRES_DB: wx01
+    ports:
+      # Expose on host so the wx01 container (host network) can reach it.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  wx01:
+    build: .
+    # Host networking required to receive Tempest UDP broadcasts.
+    # The hub sends to 255.255.255.255:50222 — this won't traverse
+    # Docker's bridge network.
+    network_mode: host
+    environment:
+      WX01_DATABASE_URL: postgres://wx01:wx01@127.0.0.1:5433/wx01?sslmode=disable
+      WX01_UDP_PORT: "50222"
+      WX01_HTTP_PORT: "3100"
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  pgdata:
