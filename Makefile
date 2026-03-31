@@ -18,13 +18,17 @@ frontend:
 dev:
 	go run ./cmd/wx01/
 
-# Package everything needed for deployment into deploy/
+# Build and deploy to a remote server
+# Usage: make deploy TARGET=user@host
 deploy: build-linux
 	cp wx01-linux-amd64 deploy/wx01-linux-amd64
-	@echo ""
+ifndef TARGET
 	@echo "Deploy package ready in deploy/"
-	@echo "Copy the deploy/ directory to your Incus container and run:"
-	@echo "  sudo ./install.sh"
+	@echo "Run: ./deploy/install.sh user@host"
+	@echo " or: make deploy TARGET=user@host"
+else
+	./deploy/install.sh $(TARGET)
+endif
 
 clean:
 	rm -rf wx01 wx01-linux-amd64 cmd/wx01/dist web/dist

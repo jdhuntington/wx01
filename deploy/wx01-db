@@ -1,6 +1,9 @@
 #!/bin/bash
 # Manages the TimescaleDB container for wx01.
 # Used by the systemd unit and can be run manually.
+#
+# Uses --network=host to avoid Docker bridge sysctl issues
+# inside Incus containers. Postgres listens on port 5433.
 
 set -euo pipefail
 
@@ -18,10 +21,11 @@ case "${1:-}" in
       docker run -d \
         --name "$CONTAINER_NAME" \
         --restart unless-stopped \
+        --network=host \
         -e POSTGRES_USER=wx01 \
         -e POSTGRES_PASSWORD=wx01 \
         -e POSTGRES_DB=wx01 \
-        -p "127.0.0.1:${PORT}:5432" \
+        -e PGPORT="$PORT" \
         -v "${DATA_DIR}:/var/lib/postgresql/data" \
         "$IMAGE"
     fi
@@ -29,7 +33,7 @@ case "${1:-}" in
     # Wait for postgres to be ready
     echo "Waiting for postgres..."
     for i in $(seq 1 30); do
-      if docker exec "$CONTAINER_NAME" pg_isready -U wx01 &>/dev/null; then
+      if docker exec "$CONTAINER_NAME" pg_isready -U wx01 -p "$PORT" &>/dev/null; then
         echo "Postgres ready."
         exit 0
       fi
