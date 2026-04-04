@@ -10,16 +10,19 @@ import (
 	"time"
 
 	"github.com/jedediah/wx01/internal/db"
+	"github.com/jedediah/wx01/internal/notify"
 )
 
 type Server struct {
 	httpServer *http.Server
 	queries    *db.Queries
+	hub        *notify.Hub
 }
 
-func NewServer(port int, pool db.Pool, distFS fs.FS) *Server {
+func NewServer(port int, pool db.Pool, distFS fs.FS, hub *notify.Hub) *Server {
 	s := &Server{
 		queries: db.NewQueries(pool),
+		hub:     hub,
 	}
 
 	mux := http.NewServeMux()
@@ -32,6 +35,7 @@ func NewServer(port int, pool db.Pool, distFS fs.FS) *Server {
 	mux.HandleFunc("GET /api/solar", s.handleSolar)
 	mux.HandleFunc("GET /api/humidity", s.handleHumidity)
 	mux.HandleFunc("GET /api/uv", s.handleUV)
+	mux.HandleFunc("GET /api/events", s.handleEvents)
 
 	if distFS != nil {
 		mux.Handle("/", frontendHandler(distFS))
@@ -152,6 +156,35 @@ func (s *Server) handleUV(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, data)
+}
+
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := s.hub.Subscribe()
+	defer s.hub.Unsubscribe(ch)
+
+	// Send an initial ping so the client knows the connection is live
+	fmt.Fprintf(w, "event: connected\ndata: {}\n\n")
+	flusher.Flush()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case msg := <-ch:
+			fmt.Fprintf(w, "event: %s\ndata: {}\n\n", msg)
+			flusher.Flush()
+		}
+	}
 }
 
 // parseTimeRange reads ?range=24h (default) and returns a since time and

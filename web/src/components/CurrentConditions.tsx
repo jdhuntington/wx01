@@ -1,9 +1,10 @@
-import { useCallback, useEffect } from 'react';
-import { getCurrent } from '../api';
+import { useCallback, useEffect, useMemo } from 'react';
+import { getCurrent, getTemperature, getHumidity, getWind, getPressure, getRain, getSolar, getUV } from '../api';
 import type { CurrentData } from '../api';
 import type { UnitSystem } from '../units';
 import { tempConvert, tempUnit, windConvert, windUnit, rainConvert, rainUnit, pressureConvert, pressureUnit } from '../units';
-import { usePolling } from '../hooks';
+import { useFetch } from '../hooks';
+import Sparkline from './Sparkline';
 
 function windDirLabel(deg: number | null): string {
   if (deg === null) return '--';
@@ -16,14 +17,53 @@ function fmt(v: number | null | undefined, decimals = 1, suffix = ''): string {
   return v.toFixed(decimals) + suffix;
 }
 
+function extractSeries(data: any[] | null, key: string, transform?: (v: number) => number): number[] {
+  if (!data) return [];
+  return data
+    .map((d: any) => d[key])
+    .filter((v: any) => v !== null && v !== undefined)
+    .map((v: number) => transform ? transform(v) : v);
+}
+
 interface Props {
   units: UnitSystem;
+  range_: string;
+  version: number;
   onUpdate?: (time: string) => void;
 }
 
-export default function CurrentConditions({ units, onUpdate }: Props) {
+export default function CurrentConditions({ units, range_, version, onUpdate }: Props) {
   const fetcher = useCallback(() => getCurrent(), []);
-  const { data, error } = usePolling<CurrentData>(fetcher, 10_000);
+  const { data, error } = useFetch<CurrentData>(fetcher, version);
+
+  const tempFetcher = useCallback(() => getTemperature(range_), [range_]);
+  const humidityFetcher = useCallback(() => getHumidity(range_), [range_]);
+  const windFetcher = useCallback(() => getWind(range_), [range_]);
+  const pressureFetcher = useCallback(() => getPressure(range_), [range_]);
+  const rainFetcher = useCallback(() => getRain(range_), [range_]);
+  const solarFetcher = useCallback(() => getSolar(range_), [range_]);
+  const uvFetcher = useCallback(() => getUV(range_), [range_]);
+
+  const { data: tempData } = useFetch(tempFetcher, version);
+  const { data: humidityData } = useFetch(humidityFetcher, version);
+  const { data: windData } = useFetch(windFetcher, version);
+  const { data: pressureData } = useFetch(pressureFetcher, version);
+  const { data: rainData } = useFetch(rainFetcher, version);
+  const { data: solarData } = useFetch(solarFetcher, version);
+  const { data: uvData } = useFetch(uvFetcher, version);
+
+  const tempTransform = useMemo(() => (v: number) => tempConvert(v, units)!, [units]);
+  const windTransform = useMemo(() => (v: number) => windConvert(v, units)!, [units]);
+  const rainTransform = useMemo(() => (v: number) => rainConvert(v, units)!, [units]);
+  const pressureTransform = useMemo(() => (v: number) => pressureConvert(v, units)!, [units]);
+
+  const tempSeries = useMemo(() => extractSeries(tempData, 'temp_avg_c', tempTransform), [tempData, tempTransform]);
+  const humiditySeries = useMemo(() => extractSeries(humidityData, 'humidity_avg_pct'), [humidityData]);
+  const windSeries = useMemo(() => extractSeries(windData, 'wind_avg_ms', windTransform), [windData, windTransform]);
+  const pressureSeries = useMemo(() => extractSeries(pressureData, 'pressure_avg_mb', pressureTransform), [pressureData, pressureTransform]);
+  const rainSeries = useMemo(() => extractSeries(rainData, 'rain_mm', rainTransform), [rainData, rainTransform]);
+  const solarSeries = useMemo(() => extractSeries(solarData, 'solar_avg_wm2'), [solarData]);
+  const uvSeries = useMemo(() => extractSeries(uvData, 'uv_avg'), [uvData]);
 
   useEffect(() => {
     if (data?.observation?.time && onUpdate) {
@@ -41,10 +81,12 @@ export default function CurrentConditions({ units, onUpdate }: Props) {
       <div className="card metric hero-metric">
         <div className="label">Temperature</div>
         <div className="value hero">{fmt(tempConvert(o.air_temperature, units), 1, tempUnit(units))}</div>
+        <Sparkline data={tempSeries} color="#e74c3c" />
       </div>
       <div className="card metric">
         <div className="label">Humidity</div>
         <div className="value">{fmt(o.relative_humidity, 0, '%')}</div>
+        <Sparkline data={humiditySeries} color="#3498db" />
       </div>
       <div className="card metric">
         <div className="label">Wind</div>
@@ -52,23 +94,28 @@ export default function CurrentConditions({ units, onUpdate }: Props) {
         <div className="detail">
           Gust {fmt(windConvert(o.wind_gust, units), 1)} · {windDirLabel(o.wind_direction)} {o.wind_direction}°
         </div>
+        <Sparkline data={windSeries} color="#2ecc71" />
       </div>
       <div className="card metric">
         <div className="label">Pressure</div>
         <div className="value">{fmt(pressureConvert(o.station_pressure, units), units === 'imperial' ? 2 : 1, ' ' + pressureUnit(units))}</div>
+        <Sparkline data={pressureSeries} color="#9b59b6" />
       </div>
       <div className="card metric">
         <div className="label">Rain</div>
         <div className="value">{fmt(rainConvert(data.rain_last_hour, units), units === 'imperial' ? 2 : 1, ' ' + rainUnit(units))}<span className="sub"> /hr</span></div>
         <div className="detail">{fmt(rainConvert(data.rain_today, units), units === 'imperial' ? 2 : 1, ' ' + rainUnit(units))} today</div>
+        <Sparkline data={rainSeries} color="#3498db" />
       </div>
       <div className="card metric">
         <div className="label">Solar</div>
         <div className="value">{fmt(o.solar_radiation, 0, ' W/m²')}</div>
+        <Sparkline data={solarSeries} color="#f39c12" />
       </div>
       <div className="card metric">
         <div className="label">UV Index</div>
         <div className="value">{fmt(o.uv, 1)}</div>
+        <Sparkline data={uvSeries} color="#e67e22" />
       </div>
     </div>
   );

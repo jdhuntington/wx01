@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { createChart, LineSeries, HistogramSeries } from 'lightweight-charts';
 import type { IChartApi, UTCTimestamp } from 'lightweight-charts';
-import { usePolling } from '../hooks';
+import { useFetch } from '../hooks';
 
 interface SeriesDef {
   name: string;
@@ -17,23 +17,26 @@ interface Props {
   range_: string;
   yFormat?: (v: number) => string;
   transform?: (v: number) => number;
+  compact?: boolean;
+  version: number;
 }
 
-export default function TimeSeriesChart({ title, fetcher, series, range_, yFormat, transform }: Props) {
+export default function TimeSeriesChart({ title, fetcher, series, range_, yFormat, transform, compact, version }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
   const boundFetcher = useCallback(() => fetcher(range_), [fetcher, range_]);
-  const { data, error } = usePolling(boundFetcher, 30_000);
+  const { data, error } = useFetch(boundFetcher, version);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const chartHeight = compact ? 100 : 220;
     const chart = createChart(containerRef.current, {
       layout: {
         background: { color: '#141424' },
         textColor: '#505060',
-        fontSize: 11,
+        fontSize: compact ? 9 : 11,
         attributionLogo: false,
       },
       grid: {
@@ -48,9 +51,9 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
         borderColor: '#1e1e30',
       },
       width: containerRef.current.clientWidth,
-      height: 220,
+      height: chartHeight,
       timeScale: {
-        timeVisible: true,
+        timeVisible: !compact,
         secondsVisible: false,
         borderColor: '#1e1e30',
       },
@@ -73,7 +76,7 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
       chart.remove();
       chartRef.current = null;
     };
-  }, [yFormat]);
+  }, [yFormat, compact]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -117,14 +120,43 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
       }
     }
 
-    chart.timeScale().fitContent();
+    // Show full requested range, not just the data we have.
+    // setVisibleRange clips to data boundaries, so we use setVisibleLogicalRange.
+    // Logical index 0 = first data point, negative = before data.
+    // We calculate how many data points would fill the full range and offset accordingly.
+    const rangeHours = parseInt(range_) || 24;
+    const rangeSeconds = rangeHours * 3600;
+    const nowSeconds = Date.now() / 1000;
+
+    // Find the earliest data point timestamp across all series
+    let earliestDataTime = nowSeconds;
+    for (const s of series) {
+      const first = data.find((d: any) => d[s.key] !== null && d[s.key] !== undefined);
+      if (first) {
+        const t = new Date(first.bucket).getTime() / 1000;
+        if (t < earliestDataTime) earliestDataTime = t;
+      }
+    }
+
+    // Average interval between data points (for logical index math)
+    const dataCount = data.length;
+    const lastTime = new Date(data[data.length - 1].bucket).getTime() / 1000;
+    const firstTime = new Date(data[0].bucket).getTime() / 1000;
+    const avgInterval = dataCount > 1 ? (lastTime - firstTime) / (dataCount - 1) : 1;
+
+    // How many logical indices before the first point does the range start?
+    const rangeStart = nowSeconds - rangeSeconds;
+    const logicalFrom = (rangeStart - firstTime) / avgInterval;
+    const logicalTo = (nowSeconds - firstTime) / avgInterval;
+
+    chart.timeScale().setVisibleLogicalRange({ from: logicalFrom, to: logicalTo });
 
     return () => {
       for (const s of seriesRefs) {
         try { chart.removeSeries(s); } catch {}
       }
     };
-  }, [data, series, yFormat, transform]);
+  }, [data, series, yFormat, transform, range_]);
 
   const showLegend = series.length > 1;
 

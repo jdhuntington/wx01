@@ -1,9 +1,10 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import CurrentConditions from './components/CurrentConditions';
 import TimeSeriesChart from './components/TimeSeriesChart';
 import { getTemperature, getWind, getRain, getPressure, getSolar, getHumidity, getUV } from './api';
 import { getStoredUnits, setStoredUnits, tempConvert, tempUnit, windConvert, windUnit, rainConvert, rainUnit, pressureConvert, pressureUnit } from './units';
 import type { UnitSystem } from './units';
+import { useServerEvents } from './hooks';
 
 const RANGES = [
   { label: '6h', value: '6h' },
@@ -19,7 +20,20 @@ function timeAgo(iso: string): string {
   return `${Math.floor(s / 3600)}h ago`;
 }
 
+function useCompact(query = '(max-width: 400px)') {
+  const [match, setMatch] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatch(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return match;
+}
+
 export default function App() {
+  const compact = useCompact();
+  const version = useServerEvents();
   const [range_, setRange] = useState('24h');
   const [units, setUnits] = useState<UnitSystem>(getStoredUnits);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
@@ -86,7 +100,7 @@ export default function App() {
         </div>
       </header>
 
-      <CurrentConditions units={units} onUpdate={handleUpdate} />
+      <CurrentConditions units={units} range_={range_} version={version} onUpdate={handleUpdate} />
 
       <div className="charts">
         <TimeSeriesChart
@@ -96,6 +110,8 @@ export default function App() {
           series={[{ name: 'Temp', key: 'temp_avg_c', color: '#e74c3c' }]}
           yFormat={tempFormatter}
           transform={tempTransform}
+          compact={compact}
+          version={version}
         />
 
         <TimeSeriesChart
@@ -104,6 +120,8 @@ export default function App() {
           range_={range_}
           series={[{ name: 'Humidity', key: 'humidity_avg_pct', color: '#3498db' }]}
           yFormat={(v) => `${v.toFixed(0)}%`}
+          compact={compact}
+          version={version}
         />
 
         <TimeSeriesChart
@@ -116,6 +134,8 @@ export default function App() {
           ]}
           yFormat={windFormatter}
           transform={windTransform}
+          compact={compact}
+          version={version}
         />
 
         <TimeSeriesChart
@@ -125,6 +145,8 @@ export default function App() {
           series={[{ name: 'Pressure', key: 'pressure_avg_mb', color: '#9b59b6' }]}
           yFormat={pressureFormatter}
           transform={pressureTransform}
+          compact={compact}
+          version={version}
         />
 
         <TimeSeriesChart
@@ -134,6 +156,8 @@ export default function App() {
           series={[{ name: 'Rain', key: 'rain_mm', color: '#3498db', type: 'histogram' }]}
           yFormat={rainFormatter}
           transform={rainTransform}
+          compact={compact}
+          version={version}
         />
 
         <TimeSeriesChart
@@ -142,6 +166,8 @@ export default function App() {
           range_={range_}
           series={[{ name: 'Solar', key: 'solar_avg_wm2', color: '#f39c12' }]}
           yFormat={(v) => `${v.toFixed(0)} W/m²`}
+          compact={compact}
+          version={version}
         />
 
         <TimeSeriesChart
@@ -150,6 +176,8 @@ export default function App() {
           range_={range_}
           series={[{ name: 'UV', key: 'uv_avg', color: '#e67e22' }]}
           yFormat={(v) => `${v.toFixed(1)}`}
+          compact={compact}
+          version={version}
         />
       </div>
     </div>

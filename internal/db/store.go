@@ -15,6 +15,10 @@ func NewStore(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+func (s *Store) notify(ctx context.Context, msgType string) {
+	s.pool.Exec(ctx, "SELECT pg_notify('wx01_data', $1)", msgType)
+}
+
 func (s *Store) InsertObservation(ctx context.Context, o *ingest.Observation) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO observations (
@@ -42,6 +46,9 @@ func (s *Store) InsertObservation(ctx context.Context, o *ingest.Observation) er
 		o.LightningAvgDist, o.LightningCount,
 		o.Battery, o.ReportInterval, o.FirmwareRevision,
 	)
+	if err == nil {
+		s.notify(ctx, "obs_st")
+	}
 	return err
 }
 
@@ -51,6 +58,9 @@ func (s *Store) InsertRapidWind(ctx context.Context, rw *ingest.RapidWind) error
 		VALUES ($1, $2, $3, $4, $5)`,
 		rw.Time, rw.SerialNumber, rw.HubSN, rw.WindSpeed, rw.WindDirection,
 	)
+	if err == nil {
+		s.notify(ctx, "rapid_wind")
+	}
 	return err
 }
 
@@ -60,6 +70,9 @@ func (s *Store) InsertRainEvent(ctx context.Context, evt *ingest.RainEvent) erro
 		VALUES ($1, $2, $3)`,
 		evt.Time, evt.SerialNumber, evt.HubSN,
 	)
+	if err == nil {
+		s.notify(ctx, "evt_precip")
+	}
 	return err
 }
 
@@ -69,6 +82,9 @@ func (s *Store) InsertLightningEvent(ctx context.Context, evt *ingest.LightningE
 		VALUES ($1, $2, $3, $4, $5)`,
 		evt.Time, evt.SerialNumber, evt.HubSN, evt.Distance, evt.Energy,
 	)
+	if err == nil {
+		s.notify(ctx, "evt_strike")
+	}
 	return err
 }
 
@@ -83,6 +99,9 @@ func (s *Store) InsertDeviceStatus(ctx context.Context, ds *ingest.DeviceStatus)
 		ds.Uptime, ds.Voltage, ds.FirmwareRevision,
 		ds.RSSI, ds.HubRSSI, ds.SensorStatus, ds.Debug,
 	)
+	if err == nil {
+		s.notify(ctx, "device_status")
+	}
 	return err
 }
 
@@ -97,5 +116,8 @@ func (s *Store) InsertHubStatus(ctx context.Context, hs *ingest.HubStatus) error
 		hs.Uptime, hs.RSSI, hs.ResetFlags, hs.Seq,
 		hs.RadioStatus, hs.RadioRebootCount, hs.RadioI2CErrors, hs.RadioNetworkID,
 	)
+	if err == nil {
+		s.notify(ctx, "hub_status")
+	}
 	return err
 }
