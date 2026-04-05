@@ -47,6 +47,8 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
         vertLine: { color: '#2a2a44', width: 1, labelBackgroundColor: '#2a2a44' },
         horzLine: { color: '#2a2a44', width: 1, labelBackgroundColor: '#2a2a44' },
       },
+      handleScroll: { mouseWheel: false },
+      handleScale: { mouseWheel: false },
       rightPriceScale: {
         borderColor: '#1e1e30',
       },
@@ -76,7 +78,7 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
       chart.remove();
       chartRef.current = null;
     };
-  }, [yFormat, compact]);
+  }, [compact]);
 
   useEffect(() => {
     const chart = chartRef.current;

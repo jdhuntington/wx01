@@ -77,6 +77,7 @@ export default function App() {
     <div className="app">
       <header>
         <div className="header-left">
+          <img src="/logo.png" alt="wx01" className="header-logo" />
           <h1>wx01</h1>
           {lastUpdate && (
             <span className="last-update">{timeAgo(lastUpdate)}</span>

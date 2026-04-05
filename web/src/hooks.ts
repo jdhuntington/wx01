@@ -26,6 +26,19 @@ function ensureEventSource() {
   eventSource = es;
 }
 
+// When the tab becomes visible again (e.g. Safari suspended it),
+// close the stale SSE connection and open a fresh one + refetch.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    ensureEventSource();
+    bump();
+  }
+});
+
 function bump() {
   globalVersion++;
   for (const fn of listeners) {
