@@ -1,7 +1,8 @@
-# Binaries
-wx01
-wx01-linux-amd64
-replay
+# Binaries (anchored so they don't match cmd/wx01/)
+/wx01
+/wx01-linux-amd64
+/deploy/wx01-linux-amd64
+/replay
 *.exe
 
 # Embedded frontend (built artifact)

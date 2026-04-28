@@ -45,7 +45,7 @@ For the file map and API endpoints, see [CLAUDE.md](./CLAUDE.md).
 A Linux box (amd64) with Docker and systemd. Grab the prebuilt binary, run
 TimescaleDB in a container next to it, point one at the other.
 
-A prebuilt linux/amd64 binary is published on every push to `main`. Direct
+A prebuilt linux/amd64 binary is published on every push to `master`. Direct
 link:
 
 [`wx01-linux-amd64` (latest)](https://github.com/jdhuntington/wx01/releases/latest/download/wx01-linux-amd64)
