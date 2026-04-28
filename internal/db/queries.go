@@ -74,6 +74,14 @@ type UVBucket struct {
 	UVMax *float64 `json:"uv_max"`
 }
 
+type LightningBucket struct {
+	TimeBucket
+	StrikeCount int      `json:"strike_count"`
+	DistanceMin *float64 `json:"distance_min_km"`
+	DistanceMax *float64 `json:"distance_max_km"`
+	EnergyMax   *int64   `json:"energy_max"`
+}
+
 type Queries struct {
 	pool *pgxpool.Pool
 }
@@ -263,6 +271,69 @@ func (q *Queries) UV(ctx context.Context, since time.Time, interval string) ([]U
 		result = append(result, b)
 	}
 	return result, rows.Err()
+}
+
+func (q *Queries) Lightning(ctx context.Context, since time.Time, interval string) ([]LightningBucket, error) {
+	rows, err := q.pool.Query(ctx, `
+		SELECT time_bucket($1::interval, time) AS bucket,
+			count(*)::int, min(distance)::double precision, max(distance)::double precision, max(energy)::bigint
+		FROM lightning_events WHERE time >= $2
+		GROUP BY bucket ORDER BY bucket
+	`, interval, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []LightningBucket
+	for rows.Next() {
+		var b LightningBucket
+		if err := rows.Scan(&b.Bucket, &b.StrikeCount, &b.DistanceMin, &b.DistanceMax, &b.EnergyMax); err != nil {
+			return nil, err
+		}
+		result = append(result, b)
+	}
+	return result, rows.Err()
+}
+
+type LightningStrike struct {
+	Time     time.Time `json:"time"`
+	Distance int16     `json:"distance_km"`
+	Energy   int32     `json:"energy"`
+}
+
+func (q *Queries) LightningStrikes(ctx context.Context, since time.Time) ([]LightningStrike, error) {
+	rows, err := q.pool.Query(ctx, `
+		SELECT time, distance, energy
+		FROM lightning_events WHERE time >= $1
+		ORDER BY time
+	`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []LightningStrike
+	for rows.Next() {
+		var s LightningStrike
+		if err := rows.Scan(&s.Time, &s.Distance, &s.Energy); err != nil {
+			return nil, err
+		}
+		result = append(result, s)
+	}
+	return result, rows.Err()
+}
+
+func (q *Queries) LightningLastHour(ctx context.Context) (int, *float64, error) {
+	row := q.pool.QueryRow(ctx, `
+		SELECT count(*)::int, min(distance)::double precision
+		FROM lightning_events
+		WHERE time >= now() - interval '1 hour'
+	`)
+	var count int
+	var minDist *float64
+	err := row.Scan(&count, &minDist)
+	return count, minDist, err
 }
 
 func (q *Queries) RainToday(ctx context.Context) (float64, error) {

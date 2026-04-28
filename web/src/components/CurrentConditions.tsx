@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { getCurrent, getTemperature, getHumidity, getWind, getPressure, getRain, getSolar, getUV } from '../api';
+import { getCurrent, getTemperature, getHumidity, getWind, getPressure, getRain, getSolar, getUV, getLightning } from '../api';
 import type { CurrentData } from '../api';
 import type { UnitSystem } from '../units';
 import { tempConvert, tempUnit, windConvert, windUnit, rainConvert, rainUnit, pressureConvert, pressureUnit } from '../units';
@@ -43,6 +43,7 @@ export default function CurrentConditions({ units, range_, version, onUpdate }: 
   const rainFetcher = useCallback(() => getRain(range_), [range_]);
   const solarFetcher = useCallback(() => getSolar(range_), [range_]);
   const uvFetcher = useCallback(() => getUV(range_), [range_]);
+  const lightningFetcher = useCallback(() => getLightning(range_), [range_]);
 
   const { data: tempData } = useFetch(tempFetcher, version);
   const { data: humidityData } = useFetch(humidityFetcher, version);
@@ -51,6 +52,7 @@ export default function CurrentConditions({ units, range_, version, onUpdate }: 
   const { data: rainData } = useFetch(rainFetcher, version);
   const { data: solarData } = useFetch(solarFetcher, version);
   const { data: uvData } = useFetch(uvFetcher, version);
+  const { data: lightningData } = useFetch(lightningFetcher, version);
 
   const tempTransform = useMemo(() => (v: number) => tempConvert(v, units)!, [units]);
   const windTransform = useMemo(() => (v: number) => windConvert(v, units)!, [units]);
@@ -64,6 +66,11 @@ export default function CurrentConditions({ units, range_, version, onUpdate }: 
   const rainSeries = useMemo(() => extractSeries(rainData, 'rain_mm', rainTransform), [rainData, rainTransform]);
   const solarSeries = useMemo(() => extractSeries(solarData, 'solar_avg_wm2'), [solarData]);
   const uvSeries = useMemo(() => extractSeries(uvData, 'uv_avg'), [uvData]);
+  const lightningSeries = useMemo(() => extractSeries(lightningData, 'strike_count'), [lightningData]);
+  const lightningTotal = useMemo(
+    () => (lightningData as any[] | null)?.reduce((sum, b) => sum + (b.strike_count ?? 0), 0) ?? 0,
+    [lightningData],
+  );
 
   useEffect(() => {
     if (data?.observation?.time && onUpdate) {
@@ -117,6 +124,21 @@ export default function CurrentConditions({ units, range_, version, onUpdate }: 
         <div className="value">{fmt(o.uv, 1)}</div>
         <Sparkline data={uvSeries} color="#e67e22" />
       </div>
+      {(lightningTotal > 0 || data.lightning_last_hour > 0) && (
+        <div className="card metric">
+          <div className="label">Lightning</div>
+          <div className="value">
+            {data.lightning_last_hour}
+            <span className="sub"> /hr</span>
+          </div>
+          <div className="detail">
+            {data.lightning_closest_km !== null
+              ? `Closest ${data.lightning_closest_km} km · ${lightningTotal} in range`
+              : `${lightningTotal} in range`}
+          </div>
+          <Sparkline data={lightningSeries} color="#f1c40f" />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { createChart, LineSeries, HistogramSeries } from 'lightweight-charts';
 import type { IChartApi, UTCTimestamp } from 'lightweight-charts';
 import { useFetch } from '../hooks';
@@ -8,24 +9,34 @@ interface SeriesDef {
   key: string;
   color: string;
   type?: 'line' | 'histogram';
+  precision?: number;
+}
+
+interface BucketOption {
+  label: string;
+  value: string;
 }
 
 interface Props {
   title: string;
-  fetcher: (range_: string) => Promise<any[]>;
+  fetcher: (range_: string, bucket?: string) => Promise<any[]>;
   series: SeriesDef[];
   range_: string;
+  bucket?: string;
+  bucketOptions?: BucketOption[];
+  onBucketChange?: (bucket: string) => void;
   yFormat?: (v: number) => string;
   transform?: (v: number) => number;
   compact?: boolean;
   version: number;
+  headerExtra?: ReactNode;
 }
 
-export default function TimeSeriesChart({ title, fetcher, series, range_, yFormat, transform, compact, version }: Props) {
+export default function TimeSeriesChart({ title, fetcher, series, range_, bucket, bucketOptions, onBucketChange, yFormat, transform, compact, version, headerExtra }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
-  const boundFetcher = useCallback(() => fetcher(range_), [fetcher, range_]);
+  const boundFetcher = useCallback(() => fetcher(range_, bucket), [fetcher, range_, bucket]);
   const { data, error } = useFetch(boundFetcher, version);
 
   useEffect(() => {
@@ -95,8 +106,12 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
         .filter((d: any) => d[s.key] !== null && d[s.key] !== undefined)
         .map((d: any) => {
           const raw = d[s.key] as number;
+          const date = new Date(d.bucket);
+          // Shift by timezone offset so lightweight-charts displays local time
+          const epochSec = Math.floor(date.getTime() / 1000);
+          const localSec = epochSec - date.getTimezoneOffset() * 60;
           return {
-            time: Math.floor(new Date(d.bucket).getTime() / 1000) as UTCTimestamp,
+            time: localSec as UTCTimestamp,
             value: transform ? transform(raw) : raw,
           };
         });
@@ -104,18 +119,22 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
       if (seriesData.length === 0) continue;
 
       if (s.type === 'histogram') {
+        const precision = s.precision ?? 2;
+        const minMove = Math.pow(10, -precision);
         const histSeries = chart.addSeries(HistogramSeries, {
           color: s.color,
-          priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+          priceFormat: { type: 'price', precision, minMove },
         });
         histSeries.setData(seriesData);
         seriesRefs.push(histSeries);
       } else {
+        const precision = s.precision ?? 1;
+        const minMove = Math.pow(10, -precision);
         const lineSeries = chart.addSeries(LineSeries, {
           color: s.color,
           lineWidth: 2,
           lineType: 2, // curved
-          priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
+          priceFormat: { type: 'price', precision, minMove },
         });
         lineSeries.setData(seriesData);
         seriesRefs.push(lineSeries);
@@ -166,16 +185,32 @@ export default function TimeSeriesChart({ title, fetcher, series, range_, yForma
     <div className="card chart-card">
       <div className="chart-header">
         <div className="chart-title">{title}</div>
-        {showLegend && (
-          <div className="chart-legend">
-            {series.map(s => (
-              <div key={s.key} className="legend-item">
-                <span className="legend-swatch" style={{ backgroundColor: s.color }} />
-                {s.name}
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="chart-header-right">
+          {bucketOptions && onBucketChange && (
+            <div className="bucket-picker">
+              {bucketOptions.map(opt => (
+                <button
+                  key={opt.value}
+                  className={(bucket || '') === opt.value ? 'active' : ''}
+                  onClick={() => onBucketChange(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {showLegend && (
+            <div className="chart-legend">
+              {series.map(s => (
+                <div key={s.key} className="legend-item">
+                  <span className="legend-swatch" style={{ backgroundColor: s.color }} />
+                  {s.name}
+                </div>
+              ))}
+            </div>
+          )}
+          {headerExtra}
+        </div>
       </div>
       {error && <div className="error">Error loading data</div>}
       <div ref={containerRef} className="chart-container" />

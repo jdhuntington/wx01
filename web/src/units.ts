@@ -36,6 +36,15 @@ export function pressureUnit(system: UnitSystem): string {
   return system === 'imperial' ? 'inHg' : 'mb';
 }
 
+export function distanceConvert(km: number | null, system: UnitSystem): number | null {
+  if (km === null) return null;
+  return system === 'imperial' ? km * 0.621371 : km;
+}
+
+export function distanceUnit(system: UnitSystem): string {
+  return system === 'imperial' ? 'mi' : 'km';
+}
+
 export function getStoredUnits(): UnitSystem {
   return (localStorage.getItem('wx01_units') as UnitSystem) || 'metric';
 }

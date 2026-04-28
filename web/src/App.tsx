@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import CurrentConditions from './components/CurrentConditions';
 import TimeSeriesChart from './components/TimeSeriesChart';
+import LightningPanel from './components/LightningPanel';
 import { getTemperature, getWind, getRain, getPressure, getSolar, getHumidity, getUV } from './api';
 import { getStoredUnits, setStoredUnits, tempConvert, tempUnit, windConvert, windUnit, rainConvert, rainUnit, pressureConvert, pressureUnit } from './units';
 import type { UnitSystem } from './units';
@@ -12,6 +13,33 @@ const RANGES = [
   { label: '7d', value: '168h' },
   { label: '30d', value: '720h' },
 ];
+
+const BUCKET_OPTIONS: Record<string, { label: string; value: string }[]> = {
+  '6h': [
+    { label: 'Auto', value: '' },
+    { label: '15m', value: '15m' },
+    { label: '30m', value: '30m' },
+    { label: '1h', value: '1h' },
+  ],
+  '24h': [
+    { label: 'Auto', value: '' },
+    { label: '15m', value: '15m' },
+    { label: '30m', value: '30m' },
+    { label: '1h', value: '1h' },
+    { label: '6h', value: '6h' },
+  ],
+  '168h': [
+    { label: 'Auto', value: '' },
+    { label: '1h', value: '1h' },
+    { label: '6h', value: '6h' },
+    { label: '1d', value: '1d' },
+  ],
+  '720h': [
+    { label: 'Auto', value: '' },
+    { label: '6h', value: '6h' },
+    { label: '1d', value: '1d' },
+  ],
+};
 
 function timeAgo(iso: string): string {
   const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
@@ -34,7 +62,13 @@ function useCompact(query = '(max-width: 400px)') {
 export default function App() {
   const compact = useCompact();
   const version = useServerEvents();
-  const [range_, setRange] = useState('24h');
+  const [range_, setRange_] = useState('24h');
+  const [rainBucket, setRainBucket] = useState('');
+
+  const setRange = useCallback((r: string) => {
+    setRange_(r);
+    setRainBucket('');
+  }, []);
   const [units, setUnits] = useState<UnitSystem>(getStoredUnits);
   const [lastUpdate, setLastUpdate] = useState<string | null>(null);
   const [, setTick] = useState(0);
@@ -154,6 +188,9 @@ export default function App() {
           title="Rain"
           fetcher={getRain}
           range_={range_}
+          bucket={rainBucket}
+          bucketOptions={BUCKET_OPTIONS[range_]}
+          onBucketChange={setRainBucket}
           series={[{ name: 'Rain', key: 'rain_mm', color: '#3498db', type: 'histogram' }]}
           yFormat={rainFormatter}
           transform={rainTransform}
@@ -177,6 +214,13 @@ export default function App() {
           range_={range_}
           series={[{ name: 'UV', key: 'uv_avg', color: '#e67e22' }]}
           yFormat={(v) => `${v.toFixed(1)}`}
+          compact={compact}
+          version={version}
+        />
+
+        <LightningPanel
+          range_={range_}
+          units={units}
           compact={compact}
           version={version}
         />

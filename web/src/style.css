@@ -208,6 +208,42 @@ header h1 {
   letter-spacing: 0.05em;
 }
 
+.chart-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.bucket-picker {
+  display: flex;
+  gap: 1px;
+  background: #141424;
+  padding: 2px;
+  border-radius: 5px;
+  border: 1px solid #1e1e30;
+}
+
+.bucket-picker button {
+  padding: 0.15rem 0.4rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #606070;
+  font-size: 0.65rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.bucket-picker button:hover {
+  color: #a0a0b0;
+}
+
+.bucket-picker button.active {
+  background: #2a2a44;
+  color: #fff;
+}
+
 .chart-legend {
   display: flex;
   gap: 0.75rem;
@@ -229,6 +265,60 @@ header h1 {
 
 .chart-container {
   width: 100%;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 1px;
+  background: #141424;
+  padding: 2px;
+  border-radius: 5px;
+  border: 1px solid #1e1e30;
+}
+
+.view-toggle button {
+  padding: 0.15rem 0.5rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #606070;
+  font-size: 0.65rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-toggle button:hover {
+  color: #a0a0b0;
+}
+
+.view-toggle button.active {
+  background: #2a2a44;
+  color: #fff;
+}
+
+.scatter-container {
+  position: relative;
+}
+
+.scatter-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: #0c0c18;
+  border: 1px solid #2a2a44;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.7rem;
+  color: #c8c8d8;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 5;
+}
+
+.scatter-tooltip strong {
+  color: #f0f0f8;
+  font-weight: 600;
 }
 
 .error {

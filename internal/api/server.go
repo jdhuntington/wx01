@@ -35,6 +35,8 @@ func NewServer(port int, pool db.Pool, distFS fs.FS, hub *notify.Hub) *Server {
 	mux.HandleFunc("GET /api/solar", s.handleSolar)
 	mux.HandleFunc("GET /api/humidity", s.handleHumidity)
 	mux.HandleFunc("GET /api/uv", s.handleUV)
+	mux.HandleFunc("GET /api/lightning", s.handleLightning)
+	mux.HandleFunc("GET /api/lightning/strikes", s.handleLightningStrikes)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 
 	if distFS != nil {
@@ -80,11 +82,14 @@ func (s *Server) handleCurrent(w http.ResponseWriter, r *http.Request) {
 
 	rainLastHour, _ := s.queries.RainLastHour(r.Context())
 	rainToday, _ := s.queries.RainToday(r.Context())
+	lightningCount, lightningClosest, _ := s.queries.LightningLastHour(r.Context())
 
 	writeJSON(w, map[string]any{
-		"observation":    cond,
-		"rain_last_hour": rainLastHour,
-		"rain_today":     rainToday,
+		"observation":              cond,
+		"rain_last_hour":           rainLastHour,
+		"rain_today":               rainToday,
+		"lightning_last_hour":      lightningCount,
+		"lightning_closest_km":     lightningClosest,
 	})
 }
 
@@ -158,6 +163,26 @@ func (s *Server) handleUV(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, data)
 }
 
+func (s *Server) handleLightning(w http.ResponseWriter, r *http.Request) {
+	since, interval := parseTimeRange(r)
+	data, err := s.queries.Lightning(r.Context(), since, interval)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	writeJSON(w, data)
+}
+
+func (s *Server) handleLightningStrikes(w http.ResponseWriter, r *http.Request) {
+	since, _ := parseTimeRange(r)
+	data, err := s.queries.LightningStrikes(r.Context(), since)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	writeJSON(w, data)
+}
+
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -188,7 +213,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseTimeRange reads ?range=24h (default) and returns a since time and
-// an appropriate bucket interval.
+// an appropriate bucket interval. An explicit ?bucket= overrides auto-selection.
 func parseTimeRange(r *http.Request) (time.Time, string) {
 	rangeStr := r.URL.Query().Get("range")
 	if rangeStr == "" {
@@ -201,6 +226,13 @@ func parseTimeRange(r *http.Request) (time.Time, string) {
 	}
 
 	since := time.Now().Add(-d)
+
+	// Allow explicit bucket override
+	if b := r.URL.Query().Get("bucket"); b != "" {
+		if interval, ok := parseBucket(b); ok {
+			return since, interval
+		}
+	}
 
 	// Pick a bucket interval that gives ~100-200 points
 	var interval string
@@ -218,6 +250,25 @@ func parseTimeRange(r *http.Request) (time.Time, string) {
 	}
 
 	return since, interval
+}
+
+func parseBucket(b string) (string, bool) {
+	switch b {
+	case "5m":
+		return "5 minutes", true
+	case "15m":
+		return "15 minutes", true
+	case "30m":
+		return "30 minutes", true
+	case "1h":
+		return "1 hour", true
+	case "6h":
+		return "6 hours", true
+	case "1d":
+		return "1 day", true
+	default:
+		return "", false
+	}
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

@@ -26,6 +26,8 @@ export interface CurrentData {
   };
   rain_last_hour: number;
   rain_today: number;
+  lightning_last_hour: number;
+  lightning_closest_km: number | null;
 }
 
 export interface TempBucket {
@@ -67,12 +69,19 @@ export interface HumidityBucket {
 }
 
 export const getCurrent = () => fetchJSON<CurrentData>('/current');
-export const getTemperature = (range_: string) => fetchJSON<TempBucket[]>(`/temperature?range=${range_}`);
-export const getWind = (range_: string) => fetchJSON<WindBucket[]>(`/wind?range=${range_}`);
-export const getRain = (range_: string) => fetchJSON<RainBucket[]>(`/rain?range=${range_}`);
-export const getPressure = (range_: string) => fetchJSON<PressureBucket[]>(`/pressure?range=${range_}`);
-export const getSolar = (range_: string) => fetchJSON<SolarBucket[]>(`/solar?range=${range_}`);
-export const getHumidity = (range_: string) => fetchJSON<HumidityBucket[]>(`/humidity?range=${range_}`);
+
+function tsUrl(endpoint: string, range_: string, bucket?: string): string {
+  let url = `/${endpoint}?range=${range_}`;
+  if (bucket) url += `&bucket=${bucket}`;
+  return url;
+}
+
+export const getTemperature = (range_: string, bucket?: string) => fetchJSON<TempBucket[]>(tsUrl('temperature', range_, bucket));
+export const getWind = (range_: string, bucket?: string) => fetchJSON<WindBucket[]>(tsUrl('wind', range_, bucket));
+export const getRain = (range_: string, bucket?: string) => fetchJSON<RainBucket[]>(tsUrl('rain', range_, bucket));
+export const getPressure = (range_: string, bucket?: string) => fetchJSON<PressureBucket[]>(tsUrl('pressure', range_, bucket));
+export const getSolar = (range_: string, bucket?: string) => fetchJSON<SolarBucket[]>(tsUrl('solar', range_, bucket));
+export const getHumidity = (range_: string, bucket?: string) => fetchJSON<HumidityBucket[]>(tsUrl('humidity', range_, bucket));
 
 export interface UVBucket {
   bucket: string;
@@ -80,4 +89,22 @@ export interface UVBucket {
   uv_max: number | null;
 }
 
-export const getUV = (range_: string) => fetchJSON<UVBucket[]>(`/uv?range=${range_}`);
+export const getUV = (range_: string, bucket?: string) => fetchJSON<UVBucket[]>(tsUrl('uv', range_, bucket));
+
+export interface LightningBucket {
+  bucket: string;
+  strike_count: number;
+  distance_min_km: number | null;
+  distance_max_km: number | null;
+  energy_max: number | null;
+}
+
+export const getLightning = (range_: string, bucket?: string) => fetchJSON<LightningBucket[]>(tsUrl('lightning', range_, bucket));
+
+export interface LightningStrike {
+  time: string;
+  distance_km: number;
+  energy: number;
+}
+
+export const getLightningStrikes = (range_: string) => fetchJSON<LightningStrike[]>(`/lightning/strikes?range=${range_}`);
